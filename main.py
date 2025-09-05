@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from flask import Flask
 
 # Configuration
-MESSAGES = ["ld", "LDROP", "ldrop","lDrop"]
+MESSAGES = ["ld", "LDROP", "ldrop","lDrop","ldrop","LDrop","Ldrop"]
 INTERVAL = 15 * 60  # 15 minutes
 STAGGER = 5 * 60   # 5 minutes between accounts
 
@@ -73,4 +73,5 @@ if __name__ == "__main__":
             threading.Thread(target=run_account, args=(account,), daemon=True).start()
         
         while True:
+
             time.sleep(3600)  # Sleep for 1 hour chunks
