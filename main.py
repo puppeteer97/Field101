@@ -3,13 +3,16 @@ import time
 import random
 import os
 import threading
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from flask import Flask
 
 # Configuration
-MESSAGES = ["ld", "LDROP", "ldrop","lDrop","ldrop","LDrop","Ldrop"]
-INTERVAL = 15 * 60  # 15 minutes
-STAGGER = 5 * 60   # 5 minutes between accounts
+MESSAGES = ["ld", "LDROP", "ldrop", "lDrop", "Ldrop"]
+DAILY_MESSAGE = "ldaily"
+INTERVAL = 15 * 60           # 15 minutes
+STAGGER = 5 * 60             # 5 minutes between accounts
+DAILY_INTERVAL = 24*60*60 + 30*60  # 24 hours 30 minutes
+DAILY_STAGGER = 3 * 60       # 3 minutes gap between accounts for daily message
 
 # Setup
 app = Flask(__name__)
@@ -30,10 +33,10 @@ def get_accounts():
                 pass
     return accounts
 
-def send_message(account):
+def send_message(account, msg):
     url = f"https://discord.com/api/v10/channels/{account['channel_id']}/messages"
     headers = {"Authorization": account['token'], "Content-Type": "application/json"}
-    data = {"content": random.choice(MESSAGES)}
+    data = {"content": msg}
     
     try:
         r = session.post(url, headers=headers, json=data, timeout=10)
@@ -47,11 +50,28 @@ def send_message(account):
     return False
 
 def run_account(account):
+    last_daily = time.time() - DAILY_INTERVAL  # allow sending daily immediately on first run
+    
+    # Stagger start for normal messages
     time.sleep((account['id'] - 1) * STAGGER)
+    
     while True:
-        send_message(account)
+        # Send normal random message
+        send_message(account, random.choice(MESSAGES))
+        
+        # Check if it's time to send daily message
+        now = time.time()
+        if now - last_daily >= DAILY_INTERVAL:
+            # Additional stagger for daily message between accounts
+            time.sleep((account['id'] - 1) * DAILY_STAGGER)
+            send_message(account, DAILY_MESSAGE)
+            last_daily = now
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Sent DAILY '{DAILY_MESSAGE}' for account {account['id']}")
+        
+        # Wait until next normal message
         time.sleep(INTERVAL)
 
+# Flask endpoints
 @app.route("/ping")
 def ping():
     return "OK"
@@ -73,5 +93,4 @@ if __name__ == "__main__":
             threading.Thread(target=run_account, args=(account,), daemon=True).start()
         
         while True:
-
-            time.sleep(3600)  # Sleep for 1 hour chunks
+            time.sleep(3600)
