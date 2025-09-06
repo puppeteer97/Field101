@@ -11,8 +11,7 @@ MESSAGES = ["ld", "LDROP", "ldrop", "lDrop", "Ldrop"]
 DAILY_MESSAGE = "ldaily"
 INTERVAL = 15 * 60      # 15 minutes between normal messages
 STAGGER = 5 * 60        # 5 minutes between accounts for normal messages
-MIN_DAILY_INTERVAL = 60 * 60  # 1 hour minimum between ldailys
-LDROP_TRIGGER = ["LDROP", "ldrop", "lDrop", "Ldrop"]  # Messages that trigger ldaily
+MIN_DAILY_INTERVAL = 5 * 60 * 60  # 5 hours minimum between ldailys
 
 # Setup
 app = Flask(__name__)
@@ -58,20 +57,21 @@ def run_account(account):
     time.sleep((account['id'] - 1) * STAGGER)  # stagger normal messages
     
     while True:
+        # Send a normal message
         msg = random.choice(MESSAGES)
         send_message(account, msg)
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Sent '{msg}' for account {account['id']}")
         
-        # Check if message triggers ldaily
+        # After 2 minutes, try sending ldaily if 5h cooldown is over
+        time.sleep(2 * 60)
         now = time.time()
-        if msg in LDROP_TRIGGER and now - account["last_daily"] >= MIN_DAILY_INTERVAL:
-            time.sleep(2 * 60)  # wait 2 minutes after LDROP
+        if now - account["last_daily"] >= MIN_DAILY_INTERVAL:
             send_message(account, DAILY_MESSAGE)
-            account["last_daily"] = time.time()
+            account["last_daily"] = now
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Sent DAILY '{DAILY_MESSAGE}' for account {account['id']}")
         
         # Wait until next normal message
-        time.sleep(INTERVAL)
+        time.sleep(INTERVAL - 2 * 60)
 
 # Flask endpoints
 @app.route("/ping")
