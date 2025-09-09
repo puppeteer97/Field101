@@ -9,9 +9,10 @@ from flask import Flask
 # Configuration
 MESSAGES = ["ld", "LDROP", "ldrop", "lDrop", "Ldrop"]
 DAILY_MESSAGE = "ldaily"
-INTERVAL = 15 * 60      # 15 minutes between normal messages
-STAGGER = 5 * 60        # 5 minutes between accounts for normal messages
-MIN_DAILY_INTERVAL = 5 * 60 * 60  # 5 hours minimum between ldailys
+INTERVAL_MIN = 16 * 60      # 16 minutes in seconds
+INTERVAL_MAX = 22 * 60      # 22 minutes in seconds
+STAGGER = 5 * 60            # 5 minutes between accounts for normal messages
+MIN_DAILY_INTERVAL = 1 * 60 * 60  # 1 hour minimum between ldailys
 
 # Setup
 app = Flask(__name__)
@@ -62,7 +63,7 @@ def run_account(account):
         send_message(account, msg)
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Sent '{msg}' for account {account['id']}")
         
-        # After 2 minutes, try sending ldaily if 5h cooldown is over
+        # After 2 minutes, try sending ldaily if 1h cooldown is over
         time.sleep(2 * 60)
         now = time.time()
         if now - account["last_daily"] >= MIN_DAILY_INTERVAL:
@@ -70,8 +71,9 @@ def run_account(account):
             account["last_daily"] = now
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Sent DAILY '{DAILY_MESSAGE}' for account {account['id']}")
         
-        # Wait until next normal message
-        time.sleep(INTERVAL - 2 * 60)
+        # Wait until next normal message, randomized between 16 and 22 minutes
+        interval = random.randint(INTERVAL_MIN, INTERVAL_MAX)
+        time.sleep(interval - 2 * 60)
 
 # Flask endpoints
 @app.route("/ping")
