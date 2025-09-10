@@ -14,7 +14,7 @@ STAGGER = 5 * 60        # 5 minutes between accounts for normal messages
 MIN_DAILY_INTERVAL = 2 * 60 * 60  # 2 hours minimum between ldailys
 MAX_RETRIES = 3         # Number of retries if message fails
 RETRY_DELAY = 10        # Delay between retries in seconds
-DAILY_LIMIT = 10        # Stop after 10 ldailys (20 hours of activity)
+DAILY_LIMIT = 10        # Stop after 10 ldailys
 PAUSE_DURATION = 4 * 60 * 60  # Pause for 4 hours after 10 ldailys
 
 # Setup
@@ -88,26 +88,33 @@ def run_account(account):
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ▶ Resuming normal operation (account {account['id']})")
             continue
 
-        # Send a normal message
+        start_time = time.time()  # record the time at message start
+
+        # 1. Send normal message
         msg = random.choice(MESSAGES)
         send_message(account, msg)
-        
-        # After 5 minutes, try sending ldaily if eligible
+
+        # 2. Wait 5 minutes before checking ldaily
         time.sleep(5 * 60)
+
+        # 3. Check and send ldaily if eligible
         now = time.time()
         if now - account["last_daily"] >= MIN_DAILY_INTERVAL and account["daily_count"] < DAILY_LIMIT:
             send_message(account, DAILY_MESSAGE)
             account["last_daily"] = now
             account["daily_count"] += 1
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 📊 ldaily count: {account['daily_count']} for account {account['id']}")
-        
-        # Check if pause period should start
+
+        # 4. Wait remainder to maintain exact INTERVAL
+        elapsed = time.time() - start_time
+        wait_time = INTERVAL - elapsed
+        if wait_time > 0:
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏳ Waiting {int(wait_time)} seconds until next normal message (account {account['id']})")
+            time.sleep(wait_time)
+
+        # 5. Start pause if daily limit reached
         if account["daily_count"] >= DAILY_LIMIT:
             account["in_pause"] = True
-        
-        # Wait until next normal message
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏳ Waiting 15 minutes for next message (account {account['id']})")
-        time.sleep(INTERVAL)
 
 # Flask endpoints
 @app.route("/ping")
