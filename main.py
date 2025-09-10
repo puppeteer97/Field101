@@ -9,12 +9,13 @@ from flask import Flask
 # Configuration
 MESSAGES = ["ld", "LDROP", "ldrop", "lDrop", "Ldrop"]
 DAILY_MESSAGE = "ldaily"
-INTERVAL_MIN = 19 * 60  # 19 minutes in seconds
-INTERVAL_MAX = 20 * 60  # 20 minutes in seconds
+INTERVAL = 15 * 60      # 15 minutes between normal messages
 STAGGER = 5 * 60        # 5 minutes between accounts for normal messages
 MIN_DAILY_INTERVAL = 2 * 60 * 60  # 2 hours minimum between ldailys
 MAX_RETRIES = 3         # Number of retries if message fails
 RETRY_DELAY = 10        # Delay between retries in seconds
+DAILY_LIMIT = 10        # Stop after 10 ldailys (20 hours of activity)
+PAUSE_DURATION = 4 * 60 * 60  # Pause for 4 hours after 10 ldailys
 
 # Setup
 app = Flask(__name__)
@@ -33,7 +34,9 @@ def get_accounts():
                     "token": token, 
                     "channel_id": channel_id, 
                     "id": i,
-                    "last_daily": 0  # Track last ldaily time
+                    "last_daily": 0,    # Track last ldaily time
+                    "daily_count": 0,   # Track how many ldailys sent
+                    "in_pause": False   # Whether in the pause period
                 })
                 message_counts[channel_id] = 0
             except:
@@ -73,24 +76,38 @@ def send_message(account, msg):
     return False
 
 def run_account(account):
-    time.sleep((account['id'] - 1) * STAGGER)  # stagger normal messages
+    time.sleep((account['id'] - 1) * STAGGER)  # stagger start times
     
     while True:
+        if account["in_pause"]:
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏸ Pausing for 4 hours (account {account['id']})")
+            time.sleep(PAUSE_DURATION)
+            account["in_pause"] = False
+            account["daily_count"] = 0
+            account["last_daily"] = 0
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ▶ Resuming normal operation (account {account['id']})")
+            continue
+
         # Send a normal message
         msg = random.choice(MESSAGES)
         send_message(account, msg)
         
-        # After 5 minutes, try sending ldaily if 2h cooldown is over
+        # After 5 minutes, try sending ldaily if eligible
         time.sleep(5 * 60)
         now = time.time()
-        if now - account["last_daily"] >= MIN_DAILY_INTERVAL:
+        if now - account["last_daily"] >= MIN_DAILY_INTERVAL and account["daily_count"] < DAILY_LIMIT:
             send_message(account, DAILY_MESSAGE)
             account["last_daily"] = now
+            account["daily_count"] += 1
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 📊 ldaily count: {account['daily_count']} for account {account['id']}")
         
-        # Wait until next normal message with random interval between 19 and 20 minutes
-        interval = random.randint(INTERVAL_MIN, INTERVAL_MAX)
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Waiting {interval // 60} minutes for next message.")
-        time.sleep(interval)
+        # Check if pause period should start
+        if account["daily_count"] >= DAILY_LIMIT:
+            account["in_pause"] = True
+        
+        # Wait until next normal message
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏳ Waiting 15 minutes for next message (account {account['id']})")
+        time.sleep(INTERVAL)
 
 # Flask endpoints
 @app.route("/ping")
