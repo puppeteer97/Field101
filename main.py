@@ -7,45 +7,46 @@ from datetime import datetime
 from flask import Flask
 
 # Configuration
-MESSAGES = ["ld", "LDROP", "ldrop", "lDrop", "Ldrop"]
-DAILY_MESSAGE = "ldaily"
-INTERVAL = 15 * 60      # 15 minutes between normal messages
-STAGGER = 5 * 60        # 5 minutes between accounts for normal messages
-MIN_DAILY_INTERVAL = 2 * 60 * 60  # 2 hours minimum between ldailys
-MAX_RETRIES = 3         # Number of retries if message fails
-RETRY_DELAY = 10        # Delay between retries in seconds
-DAILY_LIMIT = 10        # Stop after 10 ldailys
-PAUSE_DURATION = 4 * 60 * 60  # Pause for 4 hours after 10 ldailys
+MESSAGES = ["ld", "LDROP", "ldrop", "lDrop", "Ldrop"]  # Normal messages
+DAILY_MESSAGE = "ldaily"  # Special daily message
+INTERVAL = 15 * 60        # 15 minutes between normal messages
+STAGGER = 5 * 60          # 5 minutes delay between starting each account
+MIN_DAILY_INTERVAL = 3 * 60 * 60  # 3 hours between ldailys
+MAX_RETRIES = 3           # Number of retries if message fails
+RETRY_DELAY = 10          # Delay between retries in seconds
 
-# Setup
+# Flask setup to keep the script running online
 app = Flask(__name__)
-session = requests.Session()
-message_counts = {}
+session = requests.Session()  # Reuse HTTP session
+message_counts = {}  # Track how many messages sent per channel
 
+# Load all accounts from environment variables
 def get_accounts():
     accounts = []
-    for i in range(1, 4):
+    for i in range(1, 4):  # Supports 3 accounts
         token = os.environ.get(f"DISCORD_TOKEN_{i}")
         channel_id = os.environ.get(f"DISCORD_CHANNEL_ID_{i}")
         if token and channel_id:
             try:
                 channel_id = int(channel_id)
                 accounts.append({
-                    "token": token, 
-                    "channel_id": channel_id, 
+                    "token": token,
+                    "channel_id": channel_id,
                     "id": i,
-                    "last_daily": 0,    # Track last ldaily time
-                    "daily_count": 0,   # Track how many ldailys sent
-                    "in_pause": False   # Whether in the pause period
+                    "last_daily": 0  # Last time ldaily was sent
                 })
                 message_counts[channel_id] = 0
             except:
                 pass
     return accounts
 
+# Send a message to a Discord channel with retry logic
 def send_message(account, msg):
     url = f"https://discord.com/api/v10/channels/{account['channel_id']}/messages"
-    headers = {"Authorization": account['token'], "Content-Type": "application/json"}
+    headers = {
+        "Authorization": account["token"],
+        "Content-Type": "application/json"
+    }
     data = {"content": msg}
     
     for attempt in range(1, MAX_RETRIES + 1):
@@ -55,7 +56,7 @@ def send_message(account, msg):
                 message_counts[account['channel_id']] += 1
                 print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ Sent '{msg}' for account {account['id']}")
                 return True
-            elif r.status_code == 429:  # Rate limited
+            elif r.status_code == 429:  # Rate limit error
                 retry_after = int(r.headers.get('Retry-After', 60))
                 print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⚠️ Rate limited. Waiting {retry_after} seconds...")
                 time.sleep(retry_after)
@@ -75,48 +76,34 @@ def send_message(account, msg):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Failed to send '{msg}' after {MAX_RETRIES} attempts for account {account['id']}")
     return False
 
-def run_account(account):
-    time.sleep((account['id'] - 1) * STAGGER)  # stagger start times
+# Normal messages running in the main loop
+def run_normal(account):
+    time.sleep((account['id'] - 1) * STAGGER)  # Delay start for each account
     
     while True:
-        if account["in_pause"]:
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏸ Pausing for 4 hours (account {account['id']})")
-            time.sleep(PAUSE_DURATION)
-            account["in_pause"] = False
-            account["daily_count"] = 0
-            account["last_daily"] = 0
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ▶ Resuming normal operation (account {account['id']})")
-            continue
-
-        start_time = time.time()  # record the time at message start
-
-        # 1. Send normal message
+        start_time = time.time()
         msg = random.choice(MESSAGES)
         send_message(account, msg)
-
-        # 2. Wait 5 minutes before checking ldaily
-        time.sleep(5 * 60)
-
-        # 3. Check and send ldaily if eligible
-        now = time.time()
-        if now - account["last_daily"] >= MIN_DAILY_INTERVAL and account["daily_count"] < DAILY_LIMIT:
-            send_message(account, DAILY_MESSAGE)
-            account["last_daily"] = now
-            account["daily_count"] += 1
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 📊 ldaily count: {account['daily_count']} for account {account['id']}")
-
-        # 4. Wait remainder to maintain exact INTERVAL
+        
         elapsed = time.time() - start_time
         wait_time = INTERVAL - elapsed
         if wait_time > 0:
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏳ Waiting {int(wait_time)} seconds until next normal message (account {account['id']})")
             time.sleep(wait_time)
 
-        # 5. Start pause if daily limit reached
-        if account["daily_count"] >= DAILY_LIMIT:
-            account["in_pause"] = True
+# ldaily messages running in a separate loop for each account
+def run_ldaily(account):
+    while True:
+        now = time.time()
+        if now - account["last_daily"] >= MIN_DAILY_INTERVAL:
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏳ Waiting 5 minutes before sending ldaily (account {account['id']})")
+            time.sleep(5 * 60)  # Delay before sending ldaily
+            send_message(account, DAILY_MESSAGE)
+            account["last_daily"] = time.time()
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 📊 Sent ldaily for account {account['id']}")
+        time.sleep(60)  # Check every minute
 
-# Flask endpoints
+# Flask routes
 @app.route("/ping")
 def ping():
     return "OK"
@@ -135,7 +122,8 @@ if __name__ == "__main__":
         time.sleep(1)
         
         for account in accounts:
-            threading.Thread(target=run_account, args=(account,), daemon=True).start()
+            threading.Thread(target=run_normal, args=(account,), daemon=True).start()
+            threading.Thread(target=run_ldaily, args=(account,), daemon=True).start()
         
         while True:
-            time.sleep(3600)  # Keep main thread alive
+            time.sleep(3600)  # Keep the script running indefinitely
