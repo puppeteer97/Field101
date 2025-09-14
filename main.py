@@ -9,8 +9,8 @@ from flask import Flask
 # Configuration
 MESSAGES = ["ld", "LDROP", "ldrop", "lDrop", "Ldrop"]  # Normal messages
 DAILY_MESSAGE = "ldaily"  # Special daily message
-INTERVAL = 15 * 60        # 15 minutes between normal messages
-STAGGER = 5 * 60          # 5 minutes delay between starting each account
+INTERVAL = 18 * 60        # 18 minutes between normal messages
+STAGGER = 6 * 60          # 6 minutes delay between starting each account
 MIN_DAILY_INTERVAL = 3 * 60 * 60  # 3 hours between ldailys
 MAX_RETRIES = 3           # Number of retries if message fails
 RETRY_DELAY = 10          # Delay between retries in seconds
@@ -83,25 +83,31 @@ def run_normal(account):
     while True:
         start_time = time.time()
         msg = random.choice(MESSAGES)
+        
+        # Send normal message
         send_message(account, msg)
         
+        # Schedule ldaily 3 minutes after this normal message if allowed
+        now = time.time()
+        if now - account["last_daily"] >= MIN_DAILY_INTERVAL:
+            threading.Thread(target=send_ldaily_after_delay, args=(account,), daemon=True).start()
+        
+        # Wait to maintain INTERVAL cycle
         elapsed = time.time() - start_time
         wait_time = INTERVAL - elapsed
         if wait_time > 0:
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏳ Waiting {int(wait_time)} seconds until next normal message (account {account['id']})")
             time.sleep(wait_time)
 
-# ldaily messages running in a separate loop for each account
-def run_ldaily(account):
-    while True:
-        now = time.time()
-        if now - account["last_daily"] >= MIN_DAILY_INTERVAL:
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏳ Waiting 5 minutes before sending ldaily (account {account['id']})")
-            time.sleep(5 * 60)  # Delay before sending ldaily
-            send_message(account, DAILY_MESSAGE)
-            account["last_daily"] = time.time()
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 📊 Sent ldaily for account {account['id']}")
-        time.sleep(60)  # Check every minute
+# Handle ldaily message after 3 minutes without interfering with normal messages
+def send_ldaily_after_delay(account):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏳ ldaily will be sent after 3 minutes for account {account['id']}")
+    time.sleep(3 * 60)  # 3 minutes delay
+    now = time.time()
+    if now - account["last_daily"] >= MIN_DAILY_INTERVAL:
+        send_message(account, DAILY_MESSAGE)
+        account["last_daily"] = now
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 📊 Sent ldaily for account {account['id']}")
 
 # Flask routes
 @app.route("/ping")
@@ -123,7 +129,6 @@ if __name__ == "__main__":
         
         for account in accounts:
             threading.Thread(target=run_normal, args=(account,), daemon=True).start()
-            threading.Thread(target=run_ldaily, args=(account,), daemon=True).start()
         
         while True:
             time.sleep(3600)  # Keep the script running indefinitely
