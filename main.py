@@ -9,18 +9,24 @@ from flask import Flask
 # Configuration
 MESSAGES = ["ld", "LDROP", "ldrop", "lDrop", "Ldrop"]  # Normal messages
 DAILY_MESSAGE = "ldaily"  # Special daily message
-INTERVAL = 18 * 60        # 18 minutes between normal messages
-STAGGER = 6 * 60          # 6 minutes delay between starting each account
+
+# Cycle configurations
+CYCLES = [
+    {"interval": 15 * 60, "stagger": 5 * 60},
+    {"interval": 18 * 60, "stagger": 6 * 60},
+    {"interval": 21 * 60, "stagger": 7 * 60}
+]
+
 MIN_DAILY_INTERVAL = 3 * 60 * 60  # 3 hours between ldailys
 MAX_RETRIES = 3           # Number of retries if message fails
 RETRY_DELAY = 10          # Delay between retries in seconds
 
-# Flask setup to keep the script running online
+# Flask setup
 app = Flask(__name__)
-session = requests.Session()  # Reuse HTTP session
-message_counts = {}  # Track how many messages sent per channel
+session = requests.Session()
+message_counts = {}
 
-# Load all accounts from environment variables
+# Load accounts from environment variables
 def get_accounts():
     accounts = []
     for i in range(1, 4):  # Supports 3 accounts
@@ -40,7 +46,7 @@ def get_accounts():
                 pass
     return accounts
 
-# Send a message to a Discord channel with retry logic
+# Send a message with retry logic
 def send_message(account, msg):
     url = f"https://discord.com/api/v10/channels/{account['channel_id']}/messages"
     headers = {
@@ -56,7 +62,7 @@ def send_message(account, msg):
                 message_counts[account['channel_id']] += 1
                 print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ Sent '{msg}' for account {account['id']}")
                 return True
-            elif r.status_code == 429:  # Rate limit error
+            elif r.status_code == 429:
                 retry_after = int(r.headers.get('Retry-After', 60))
                 print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⚠️ Rate limited. Waiting {retry_after} seconds...")
                 time.sleep(retry_after)
@@ -76,33 +82,33 @@ def send_message(account, msg):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Failed to send '{msg}' after {MAX_RETRIES} attempts for account {account['id']}")
     return False
 
-# Normal messages running in the main loop
+# Run normal messages in alternating cycles
 def run_normal(account):
-    time.sleep((account['id'] - 1) * STAGGER)  # Delay start for each account
-    
+    cycle_index = 0  # Start with first cycle
     while True:
-        start_time = time.time()
-        msg = random.choice(MESSAGES)
+        cycle = CYCLES[cycle_index]
+        interval = cycle["interval"]
+        stagger = cycle["stagger"]
+        
+        # Initial delay based on account id
+        time.sleep((account['id'] - 1) * stagger)
         
         # Send normal message
+        msg = random.choice(MESSAGES)
         send_message(account, msg)
         
-        # Schedule ldaily 3 minutes after this normal message if allowed
-        now = time.time()
-        if now - account["last_daily"] >= MIN_DAILY_INTERVAL:
-            threading.Thread(target=send_ldaily_after_delay, args=(account,), daemon=True).start()
+        # Start ldaily thread after sending message
+        threading.Thread(target=send_ldaily, args=(account,), daemon=True).start()
         
-        # Wait to maintain INTERVAL cycle
-        elapsed = time.time() - start_time
-        wait_time = INTERVAL - elapsed
-        if wait_time > 0:
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏳ Waiting {int(wait_time)} seconds until next normal message (account {account['id']})")
-            time.sleep(wait_time)
+        # Wait for the interval before the next message
+        time.sleep(interval)
+        
+        # Move to next cycle
+        cycle_index = (cycle_index + 1) % len(CYCLES)
 
-# Handle ldaily message after 3 minutes without interfering with normal messages
-def send_ldaily_after_delay(account):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏳ ldaily will be sent after 3 minutes for account {account['id']}")
-    time.sleep(3 * 60)  # 3 minutes delay
+# Send ldaily 3 minutes after normal message
+def send_ldaily(account):
+    time.sleep(3 * 60)
     now = time.time()
     if now - account["last_daily"] >= MIN_DAILY_INTERVAL:
         send_message(account, DAILY_MESSAGE)
@@ -121,6 +127,7 @@ def status():
 def run_server():
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
 
+# Main program
 if __name__ == "__main__":
     accounts = get_accounts()
     if accounts:
@@ -131,4 +138,4 @@ if __name__ == "__main__":
             threading.Thread(target=run_normal, args=(account,), daemon=True).start()
         
         while True:
-            time.sleep(3600)  # Keep the script running indefinitely
+            time.sleep(3600)  # Keep running indefinitely
