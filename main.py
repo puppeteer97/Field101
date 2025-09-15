@@ -12,7 +12,7 @@ DAILY_MESSAGE = "ldaily"
 CYCLES = [
     {"stagger": 5 * 60},  # Cycle 1 stagger of 5 minutes
     {"stagger": 6 * 60},  # Cycle 2 stagger of 6 minutes
-    {"stagger": 7 * 60}   # Cycle 3 stagger of 7 minutes
+    {"stagger": 7 * 60}   # Cycles 3 stagger of 7 minutes
 ]
 MAX_RETRIES = 3
 RETRY_DELAY = 10
@@ -120,3 +120,4 @@ if __name__ == "__main__":
         
         while True:
             time.sleep(3600)
+
