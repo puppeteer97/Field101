@@ -23,21 +23,21 @@ def log(msg):
 # --- Load Single Account ---
 def get_account():
     account = None
-    channel_id = os.environ.get("APPLE_CHANNEL_ID")
-    token = os.environ.get("APPLE_TOKEN")
+    channel_id = os.environ.get("DISCORD_CHANNEL_ID")
+    token = os.environ.get("DISCORD_TOKEN")
 
     if not channel_id:
-        log("❌ No APPLE_CHANNEL_ID found in environment!")
+        log("❌ No DISCORD_CHANNEL_ID found in environment!")
         return None
 
     try:
         channel_id = int(channel_id)
     except ValueError:
-        log("⚠ Invalid APPLE_CHANNEL_ID (must be a number)")
+        log("⚠ Invalid DISCORD_CHANNEL_ID (must be a number)")
         return None
 
     if not token:
-        log("⚠ Missing APPLE_TOKEN")
+        log("⚠ Missing DISCORD_TOKEN")
         return None
 
     message_counts[channel_id] = 0
@@ -51,7 +51,7 @@ def get_account():
 
 # --- Message Sending ---
 def send_message(account, msg):
-    url = f"https://apple.com/api/v10/channels/{account['channel_id']}/messages"
+    url = f"https://discord.com/api/v10/channels/{account['channel_id']}/messages"
     headers = {
         "Authorization": account["token"],
         "Content-Type": "application/json"
