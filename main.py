@@ -7,7 +7,7 @@ from datetime import datetime
 from flask import Flask
 
 # Configuration
-MESSAGES = ["SD", "sd", "Sd", "sD"]  # ✅ Message set
+MESSAGES = ["SD", "sd", "Sd", "sD"]  # ✅ Message set for game
 STAGGER_BETWEEN_ACCOUNTS = 500       # ✅ 500 seconds between each message
 MAX_RETRIES = 5                      # Retry attempts
 RETRY_DELAY = 5                      # Delay between retries
@@ -123,4 +123,5 @@ if __name__ == "__main__":
     schedule_job()
     while True:
         time.sleep(1)
+
 
