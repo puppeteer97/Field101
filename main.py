@@ -8,7 +8,8 @@ from flask import Flask
 
 # Configuration
 MESSAGES = ["SD", "sd", "Sd", "sD"]  # ✅ Message set
-STAGGER_BETWEEN_ACCOUNTS = 500       # ✅ 500 seconds between each message
+STAGGER_MIN = 490                    # ✅ Minimum delay
+STAGGER_MAX = 550                    # ✅ Maximum delay
 MAX_RETRIES = 5                      # Retry attempts
 RETRY_DELAY = 5                      # Delay between retries
 
@@ -92,8 +93,9 @@ def run_cycle(account):
         msg = random.choice(MESSAGES)
         send_message(account, msg)
         cycle_index += 1
-        log(f"✅ Cycle {cycle_index} complete. Waiting {STAGGER_BETWEEN_ACCOUNTS} seconds before next message...")
-        time.sleep(STAGGER_BETWEEN_ACCOUNTS)
+        next_wait = random.randint(STAGGER_MIN, STAGGER_MAX)
+        log(f"✅ Cycle {cycle_index} complete. Waiting {next_wait} seconds before next message...")
+        time.sleep(next_wait)
 
 # --- Web Monitoring ---
 @app.route("/ping")
@@ -117,12 +119,9 @@ def schedule_job():
 
 # --- Main ---
 if __name__ == "__main__":
-    log("🚀 Starting bot (single account, SD messages, 500s interval)")
+    log("🚀 Starting bot (single account, SD messages, 490–550s random interval)")
     threading.Thread(target=run_server, daemon=True).start()
     time.sleep(1)
     schedule_job()
     while True:
         time.sleep(1)
-
-
-
