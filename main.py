@@ -8,8 +8,8 @@ from flask import Flask
 
 # Configuration
 MESSAGES = ["SD", "sd", "Sd", "sD"]  # ✅ Message set
-STAGGER_MIN = 494                    # ✅ Minimum delay
-STAGGER_MAX = 590                    # ✅ Maximum delay
+STAGGER_MIN = 500                    # ✅ Minimum delay
+STAGGER_MAX = 620                    # ✅ Maximum delay
 MAX_RETRIES = 5                      # Retry attempts
 RETRY_DELAY = 5                      # Delay between retries
 
