@@ -6,14 +6,24 @@ import threading
 from datetime import datetime
 from flask import Flask
 
+# -----------------------------------
 # Configuration
-MESSAGES = ["SD", "sd", "Sd", "sD"]  # ✅ Message set
-STAGGER_MIN = 500                    # ✅ Minimum delay
-STAGGER_MAX = 620                    # ✅ Maximum delay
-MAX_RETRIES = 5                      # Retry attempts
-RETRY_DELAY = 5                      # Delay between retries
+# -----------------------------------
+SD_MESSAGES = ["SD", "sd", "Sd", "sD"]        # Channel 1 messages
+NS_MESSAGES = ["NS", "ns", "Ns", "nS"]        # Channel 2 messages
 
+SD_MIN = 490
+SD_MAX = 610
+
+NS_MIN = 610
+NS_MAX = 730
+
+MAX_RETRIES = 5
+RETRY_DELAY = 5
+
+# -----------------------------------
 # Setup
+# -----------------------------------
 app = Flask(__name__)
 session = requests.Session()
 message_counts = {}
@@ -21,38 +31,59 @@ message_counts = {}
 def log(msg):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
-# --- Load Single Account ---
+# -----------------------------------
+# Load Account + Channels (NS optional)
+# -----------------------------------
 def get_account():
-    account = None
-    channel_id = os.environ.get("DISCORD_CHANNEL_ID")
     token = os.environ.get("DISCORD_TOKEN")
+    channel_sd = os.environ.get("DISCORD_CHANNEL_ID")
+    channel_ns = os.environ.get("DISCORD_CHANNEL_ID_2")
 
-    if not channel_id:
-        log("❌ No DISCORD_CHANNEL_ID found in environment!")
+    if not token:
+        log("❌ Missing DISCORD_TOKEN")
+        return None
+
+    if not channel_sd:
+        log("❌ Missing DISCORD_CHANNEL_ID (SD channel). Cannot run.")
         return None
 
     try:
-        channel_id = int(channel_id)
+        channel_sd = int(channel_sd)
     except ValueError:
-        log("⚠ Invalid DISCORD_CHANNEL_ID (must be a number)")
+        log("⚠ DISCORD_CHANNEL_ID must be a number")
         return None
 
-    if not token:
-        log("⚠ Missing DISCORD_TOKEN")
-        return None
+    # Track SD channel messages
+    message_counts[channel_sd] = 0
 
-    message_counts[channel_id] = 0
+    # Handle NS channel (optional)
+    ns_available = True
+    if not channel_ns:
+        log("⚠ DISCORD_CHANNEL_ID_2 missing. NS messages disabled.")
+        ns_available = False
+    else:
+        try:
+            channel_ns = int(channel_ns)
+            message_counts[channel_ns] = 0
+        except ValueError:
+            log("⚠ DISCORD_CHANNEL_ID_2 must be a number. NS disabled.")
+            ns_available = False
+
     account = {
         "token": token,
-        "channel_id": channel_id,
+        "channel_sd": channel_sd,
+        "channel_ns": channel_ns if ns_available else None,
+        "ns_enabled": ns_available,
         "id": 1
     }
 
     return account
 
-# --- Message Sending ---
-def send_message(account, msg):
-    url = f"https://discord.com/api/v10/channels/{account['channel_id']}/messages"
+# -----------------------------------
+# Send Message Function
+# -----------------------------------
+def send_message(account, channel_id, msg):
+    url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
     headers = {
         "Authorization": account["token"],
         "Content-Type": "application/json"
@@ -63,8 +94,8 @@ def send_message(account, msg):
         try:
             r = session.post(url, headers=headers, json=data, timeout=10)
             if r.status_code in [200, 204]:
-                message_counts[account['channel_id']] += 1
-                log(f"✅ Sent '{msg}' for account {account['id']}")
+                message_counts[channel_id] += 1
+                log(f"✅ Sent '{msg}' to channel {channel_id}")
                 return True
             elif r.status_code == 429:
                 retry_after = int(r.headers.get('Retry-After', 60))
@@ -83,46 +114,75 @@ def send_message(account, msg):
             log(f"🔄 Retrying in {RETRY_DELAY} seconds...")
             time.sleep(RETRY_DELAY)
 
-    log(f"❌ Failed to send '{msg}' after {MAX_RETRIES} attempts for account {account['id']}")
+    log(f"❌ Failed to send '{msg}' after {MAX_RETRIES} attempts")
     return False
 
-# --- Single Account Loop ---
-def run_cycle(account):
-    cycle_index = 0
+# -----------------------------------
+# SD Loop
+# -----------------------------------
+def sd_loop(account):
+    cycle = 0
     while True:
-        msg = random.choice(MESSAGES)
-        send_message(account, msg)
-        cycle_index += 1
-        next_wait = random.randint(STAGGER_MIN, STAGGER_MAX)
-        log(f"✅ Cycle {cycle_index} complete. Waiting {next_wait} seconds before next message...")
-        time.sleep(next_wait)
+        msg = random.choice(SD_MESSAGES)
+        send_message(account, account["channel_sd"], msg)
+        cycle += 1
+        wait = random.randint(SD_MIN, SD_MAX)
+        log(f"🔵 SD cycle {cycle} done. Waiting {wait} seconds...")
+        time.sleep(wait)
 
-# --- Web Monitoring ---
+# -----------------------------------
+# NS Loop (only if enabled)
+# -----------------------------------
+def ns_loop(account):
+    cycle = 0
+    while True:
+        msg = random.choice(NS_MESSAGES)
+        send_message(account, account["channel_ns"], msg)
+        cycle += 1
+        wait = random.randint(NS_MIN, NS_MAX)
+        log(f"🟣 NS cycle {cycle} done. Waiting {wait} seconds...")
+        time.sleep(wait)
+
+# -----------------------------------
+# Web Monitor
+# -----------------------------------
 @app.route("/ping")
 def ping():
     return "OK"
 
 @app.route("/")
 def status():
-    return f"Active account: 1 | Total messages sent: {sum(message_counts.values())}"
+    return f"Messages sent: {message_counts}"
+
+# -----------------------------------
+# Launch
+# -----------------------------------
+def schedule_job():
+    account = get_account()
+    if not account:
+        log("❌ No account loaded. Exiting.")
+        return
+
+    # Always start SD
+    threading.Thread(target=sd_loop, args=(account,), daemon=True).start()
+
+    # Start NS only if available
+    if account["ns_enabled"]:
+        threading.Thread(target=ns_loop, args=(account,), daemon=True).start()
 
 def run_server():
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
 
-# --- Job Scheduling ---
-def schedule_job():
-    account = get_account()
-    if not account:
-        log("❌ No valid account found. Exiting.")
-        return
-    threading.Thread(target=run_cycle, args=(account,), daemon=True).start()
-
-# --- Main ---
+# -----------------------------------
+# Main
+# -----------------------------------
 if __name__ == "__main__":
-    log("🚀 Starting bot (single account, SD messages, 490–550s random interval)")
+    log("🚀 Starting bot (SD always active, NS optional)")
+
     threading.Thread(target=run_server, daemon=True).start()
     time.sleep(1)
+
     schedule_job()
+
     while True:
         time.sleep(1)
-
