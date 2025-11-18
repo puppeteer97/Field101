@@ -9,7 +9,7 @@ from flask import Flask
 # -----------------------------------
 # Configuration
 # -----------------------------------
-SD_MESSAGES = ["bruh", "bruh", "bruh", "bruh"]        # Channel 1 messages
+SD_MESSAGES = ["sD", "Sd", "sd", "SD"]        # Channel 1 messages
 NS_MESSAGES = ["NS", "ns", "Ns", "nS"]        # Channel 2 messages
 
 SD_MIN = 490
@@ -186,4 +186,5 @@ if __name__ == "__main__":
 
     while True:
         time.sleep(1)
+
 
