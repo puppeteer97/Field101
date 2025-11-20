@@ -9,7 +9,7 @@ from flask import Flask
 # -----------------------------------
 # Configuration
 # -----------------------------------
-SD_MESSAGES = ["sD", "sd", "Sd", "SD"]        # Channel 1 messages
+SD_MESSAGES = ["msD", "msd", "mSd", "mSD"]        # Channel 1 messages
 NS_MESSAGES = ["NS", "ns", "Ns", "nS"]        # Channel 2 messages
 
 SD_MIN = 490
