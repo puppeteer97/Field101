@@ -9,8 +9,8 @@ from flask import Flask
 # -----------------------------------
 # Configuration
 # -----------------------------------
-SD_MESSAGES = ["msd", "msD", "mSd", "mSD"]        # Channel 1 messages
-NS_MESSAGES = ["mNS", "mns", "mNs", "mnS"]        # Channel 2 messages
+SD_MESSAGES = ["sd", "sD", "Sd", "SD"]        # Channel 1 messages
+NS_MESSAGES = ["NS", "ns", "Ns", "nS"]        # Channel 2 messages
 
 SD_MIN = 490
 SD_MAX = 610
