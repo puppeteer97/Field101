@@ -12,8 +12,8 @@ from flask import Flask
 SD_MESSAGES = ["ld", "lD", "Ld","lw","LW","Lw","ldaily","lW","LD"]        # Channel 1 messages
 NS_MESSAGES = ["NS", "ns", "Ns", "nS"]        # Channel 2 messages
 
-SD_MIN = 1140
-SD_MAX = 1440
+SD_MIN = 360
+SD_MAX = 420
 
 NS_MIN = 610
 NS_MAX = 730
